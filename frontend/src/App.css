@@ -1,16 +1,30 @@
+/* ========================================
+   SutraAI — Design System
+   ======================================== */
+
 :root {
-  --bg: #0f0f0f;
-  --surface: #1a1a1a;
-  --surface-2: #242424;
-  --border: #333;
+  --bg: #0a0a0f;
+  --surface: rgba(255, 255, 255, 0.03);
+  --surface-hover: rgba(255, 255, 255, 0.06);
+  --surface-2: rgba(255, 255, 255, 0.05);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-hover: rgba(255, 255, 255, 0.15);
   --text: #e8e8e8;
-  --text-muted: #999;
+  --text-muted: #888;
   --accent: #e8a838;
   --accent-dim: #c4872a;
   --accent-bg: rgba(232, 168, 56, 0.08);
   --danger: #e85555;
-  --radius: 10px;
-  --radius-sm: 6px;
+  --radius: 14px;
+  --radius-sm: 8px;
+  --radius-lg: 20px;
+  --font-heading: "Space Grotesk", "Inter", sans-serif;
+  --font-body: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --transition: 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+  --glass-bg: rgba(255, 255, 255, 0.03);
+  --glass-border: rgba(255, 255, 255, 0.07);
+  --glass-hover-bg: rgba(255, 255, 255, 0.06);
+  --glass-hover-border: rgba(255, 255, 255, 0.14);
 }
 
 * {
@@ -20,56 +34,481 @@
 }
 
 body {
-  font-family: "Inter", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-body);
   background: var(--bg);
   color: var(--text);
   line-height: 1.6;
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
 }
+
+/* ========================================
+   Mesh Background
+   ======================================== */
+
+.mesh-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+.mesh-bg::before,
+.mesh-bg::after {
+  content: "";
+  position: absolute;
+  border-radius: 50%;
+  filter: blur(120px);
+  opacity: 0.10;
+}
+
+.mesh-bg::before {
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, #e8a838 0%, transparent 70%);
+  top: -10%;
+  right: -5%;
+  animation: meshFloat 20s ease-in-out infinite;
+}
+
+.mesh-bg::after {
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, #58b4e8 0%, transparent 70%);
+  bottom: -10%;
+  left: -5%;
+  animation: meshFloat 20s ease-in-out infinite reverse;
+}
+
+@keyframes meshFloat {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  25% { transform: translate(60px, -40px) scale(1.05); }
+  50% { transform: translate(-30px, 50px) scale(0.95); }
+  75% { transform: translate(40px, 30px) scale(1.02); }
+}
+
+/* ========================================
+   App Shell
+   ======================================== */
 
 .app {
   min-height: 100vh;
   display: flex;
   flex-direction: column;
+  position: relative;
+  z-index: 1;
 }
 
-/* Header */
-.app-header {
+/* ========================================
+   Nav Bar
+   ======================================== */
+
+.nav-bar {
+  position: sticky;
+  top: 0;
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.9rem 1.5rem;
+  background: rgba(10, 10, 15, 0.7);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   border-bottom: 1px solid var(--border);
-  padding: 2rem 1.5rem 1.5rem;
-  text-align: center;
-  background: linear-gradient(180deg, rgba(232, 168, 56, 0.04) 0%, transparent 100%);
 }
 
-.header-content {
+.nav-logo {
+  font-family: var(--font-heading);
+  font-size: 1.2rem;
+  font-weight: 700;
+  color: var(--accent);
+  cursor: pointer;
+  letter-spacing: -0.02em;
+  transition: opacity var(--transition);
+}
+
+.nav-logo:hover {
+  opacity: 0.8;
+}
+
+.nav-home-btn {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.82rem;
+  font-weight: 500;
+  padding: 0.4rem 1rem;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.nav-home-btn:hover {
+  color: var(--text);
+  border-color: var(--border-hover);
+  background: var(--glass-hover-bg);
+}
+
+/* ========================================
+   View Transitions
+   ======================================== */
+
+.view-container {
+  flex: 1;
+  animation: fadeInUp 0.4s ease-out;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(16px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* ========================================
+   Glass Card Utility
+   ======================================== */
+
+.glass-card {
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  transition: all var(--transition);
+  cursor: pointer;
+}
+
+.glass-card:hover {
+  background: var(--glass-hover-bg);
+  border-color: var(--glass-hover-border);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+}
+
+/* ========================================
+   Hero Section
+   ======================================== */
+
+.hero {
+  text-align: center;
+  padding: 5rem 1.5rem 3rem;
   max-width: 800px;
   margin: 0 auto;
 }
 
-.app-title {
-  font-size: 1.8rem;
+.hero-title {
+  font-family: var(--font-heading);
+  font-size: 3.5rem;
   font-weight: 700;
-  color: var(--accent);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  background: linear-gradient(135deg, #e8a838 0%, #f0c060 40%, #e8a838 60%, #d09020 100%);
+  background-size: 200% 200%;
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: shimmer 6s ease-in-out infinite;
+  margin-bottom: 1rem;
 }
 
-.title-icon {
-  font-size: 1.6rem;
+@keyframes shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
 }
 
-.app-subtitle {
+.hero-subtitle {
   color: var(--text-muted);
-  font-size: 0.9rem;
-  margin-top: 0.35rem;
+  font-size: 1.1rem;
+  max-width: 500px;
+  margin: 0 auto 2.5rem;
+  line-height: 1.6;
 }
 
-/* Main */
-.app-main {
+.hero-search {
+  display: flex;
+  gap: 0.5rem;
+  max-width: 560px;
+  margin: 0 auto 1.25rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius);
+  padding: 0.4rem;
+  transition: border-color var(--transition);
+}
+
+.hero-search:focus-within {
+  border-color: rgba(232, 168, 56, 0.4);
+}
+
+.hero-search-input {
   flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--text);
+  font-size: 0.95rem;
+  padding: 0.75rem 1rem;
+  font-family: var(--font-body);
+}
+
+.hero-search-input::placeholder {
+  color: var(--text-muted);
+}
+
+.hero-search-btn {
+  background: var(--accent);
+  color: #000;
+  border: none;
+  border-radius: var(--radius-sm);
+  padding: 0.75rem 1.5rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: background var(--transition);
+  white-space: nowrap;
+}
+
+.hero-search-btn:hover {
+  background: var(--accent-dim);
+}
+
+.hero-actions {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 1rem;
+}
+
+.surprise-btn {
+  background: transparent;
+  border: 1px solid var(--glass-border);
+  color: var(--text-muted);
+  font-family: var(--font-body);
+  font-size: 0.85rem;
+  padding: 0.55rem 1.2rem;
+  border-radius: 20px;
+  cursor: pointer;
+  transition: all var(--transition);
+}
+
+.surprise-btn:hover {
+  color: var(--accent);
+  border-color: rgba(232, 168, 56, 0.4);
+  background: var(--accent-bg);
+}
+
+/* ========================================
+   Section Headings
+   ======================================== */
+
+.home-content {
+  max-width: 1100px;
+  margin: 0 auto;
+  padding: 0 1.5rem 3rem;
+}
+
+.section-heading {
+  font-family: var(--font-heading);
+  font-size: 1.5rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 0.4rem;
+}
+
+.section-subheading {
+  color: var(--text-muted);
+  font-size: 0.88rem;
+  margin-bottom: 1.5rem;
+}
+
+.home-section {
+  margin-bottom: 3.5rem;
+}
+
+/* ========================================
+   Bento Grid — Theme Cards
+   ======================================== */
+
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.theme-card {
+  padding: 1.5rem;
+  position: relative;
+  overflow: hidden;
+}
+
+.theme-card::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  border-radius: var(--radius) var(--radius) 0 0;
+}
+
+.theme-card-title {
+  font-family: var(--font-heading);
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin-bottom: 0.2rem;
+  letter-spacing: -0.01em;
+}
+
+.theme-card-subtitle {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  margin-bottom: 0.75rem;
+}
+
+.theme-card-desc {
+  font-size: 0.82rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+}
+
+.theme-card:hover .theme-card-title {
+  color: var(--accent);
+}
+
+/* ========================================
+   Bento Grid — Scripture Cards
+   ======================================== */
+
+.scripture-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.scripture-card {
+  padding: 1.5rem;
+  display: flex;
+  flex-direction: column;
+}
+
+.scripture-card-header {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.65rem;
+}
+
+.scripture-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.scripture-card-name {
+  font-family: var(--font-heading);
+  font-size: 1rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.scripture-card-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  line-height: 1.55;
+  flex: 1;
+  margin-bottom: 0.85rem;
+}
+
+.scripture-card-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.scripture-card-count {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  opacity: 0.6;
+}
+
+.scripture-card-link {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--accent);
+  opacity: 0;
+  transition: opacity var(--transition);
+}
+
+.scripture-card:hover .scripture-card-link {
+  opacity: 1;
+}
+
+/* ========================================
+   Showdown Cards
+   ======================================== */
+
+.showdown-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 1rem;
+}
+
+.showdown-card {
+  padding: 1.5rem;
+}
+
+.showdown-card-title {
+  font-family: var(--font-heading);
+  font-size: 0.95rem;
+  font-weight: 600;
+  margin-bottom: 0.75rem;
+  letter-spacing: -0.01em;
+}
+
+.showdown-card-texts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+}
+
+.showdown-pill {
+  font-size: 0.7rem;
+  font-weight: 500;
+  padding: 0.2rem 0.55rem;
+  border-radius: 10px;
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  background: rgba(255, 255, 255, 0.02);
+}
+
+.showdown-card:hover .showdown-card-title {
+  color: var(--accent);
+}
+
+/* ========================================
+   Ask View
+   ======================================== */
+
+.ask-view {
   max-width: 860px;
   width: 100%;
   margin: 0 auto;
-  padding: 1.5rem;
+  padding: 2rem 1.5rem 3rem;
+}
+
+.ask-view-title {
+  font-family: var(--font-heading);
+  font-size: 1.6rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin-bottom: 1.5rem;
 }
 
 /* Text Selector */
@@ -77,79 +516,74 @@ body {
   margin-bottom: 1.25rem;
 }
 
-.selector-row {
+.selector-pills {
   display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
   align-items: center;
-  gap: 0.75rem;
-  overflow-x: auto;
-  padding-bottom: 2px;
 }
 
-.selector-tabs {
-  display: flex;
-  gap: 0.25rem;
-  flex: 1;
-  overflow-x: auto;
-}
-
-.tab-button {
-  background: transparent;
-  border: none;
-  border-bottom: 2px solid transparent;
-  color: var(--text-muted);
-  padding: 0.6rem 0.85rem;
-  font-size: 0.82rem;
-  font-family: inherit;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: all 0.15s;
-  display: flex;
+.pill-button {
+  display: inline-flex;
   align-items: center;
   gap: 0.4rem;
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  color: var(--text-muted);
+  padding: 0.45rem 0.9rem;
+  font-size: 0.82rem;
+  font-family: var(--font-body);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
 }
 
-.tab-button:hover {
+.pill-button:hover {
+  border-color: var(--border-hover);
   color: var(--text);
+  background: var(--glass-hover-bg);
 }
 
-.tab-button.active {
-  color: var(--text);
+.pill-button.active {
   font-weight: 600;
 }
 
-.tab-button.compare-tab.active {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: var(--radius-sm);
-}
-
-.tab-count {
-  font-size: 0.7rem;
-  color: var(--text-muted);
-  opacity: 0.6;
-}
-
-.compare-toggle {
-  background: var(--surface-2);
-  border: 1px solid var(--border);
-  color: var(--text-muted);
-  padding: 0.45rem 0.85rem;
-  font-size: 0.8rem;
-  border-radius: 20px;
-  cursor: pointer;
-  white-space: nowrap;
-  font-family: inherit;
-  transition: all 0.15s;
+.pill-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
   flex-shrink: 0;
 }
 
-.compare-toggle:hover {
-  border-color: var(--accent);
+.pill-check {
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.pill-count {
+  font-size: 0.68rem;
+  color: var(--text-muted);
+  opacity: 0.55;
+}
+
+.pill-button.active .pill-count {
+  opacity: 0.8;
+}
+
+.pill-button.compare-toggle {
+  background: var(--surface-2);
+  margin-left: auto;
+}
+
+.pill-button.compare-toggle:hover {
+  border-color: rgba(232, 168, 56, 0.4);
   color: var(--accent);
 }
 
-.compare-toggle.active {
+.pill-button.compare-toggle.active {
   background: var(--accent-bg);
-  border-color: var(--accent);
+  border-color: rgba(232, 168, 56, 0.4);
   color: var(--accent);
 }
 
@@ -160,7 +594,7 @@ body {
   padding-left: 0.25rem;
 }
 
-/* Search */
+/* Search Form */
 .search-form {
   margin-bottom: 1.5rem;
 }
@@ -168,15 +602,24 @@ body {
 .input-wrapper {
   display: flex;
   gap: 0.5rem;
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius);
-  padding: 0.35rem;
-  transition: border-color 0.2s;
+  padding: 0.4rem;
+  transition: border-color var(--transition);
 }
 
 .input-wrapper:focus-within {
-  border-color: var(--accent);
+  border-color: rgba(232, 168, 56, 0.4);
+}
+
+.input-wrapper::before {
+  content: "\1F50D";
+  display: flex;
+  align-items: center;
+  padding-left: 0.85rem;
+  font-size: 1rem;
+  opacity: 0.4;
 }
 
 .search-input {
@@ -185,9 +628,9 @@ body {
   border: none;
   outline: none;
   color: var(--text);
-  font-size: 1rem;
-  padding: 0.75rem 1rem;
-  font-family: inherit;
+  font-size: 1.02rem;
+  padding: 0.8rem 0.75rem;
+  font-family: var(--font-body);
 }
 
 .search-input::placeholder {
@@ -199,12 +642,12 @@ body {
   color: #000;
   border: none;
   border-radius: var(--radius-sm);
-  padding: 0.75rem 1.5rem;
+  padding: 0.8rem 1.6rem;
   font-size: 0.95rem;
   font-weight: 600;
   cursor: pointer;
-  transition: background 0.2s;
-  font-family: inherit;
+  transition: background var(--transition);
+  font-family: var(--font-body);
   min-width: 80px;
   display: flex;
   align-items: center;
@@ -247,19 +690,19 @@ body {
 }
 
 .sample-button {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   border-radius: 20px;
   color: var(--text);
   padding: 0.5rem 1rem;
   font-size: 0.85rem;
   cursor: pointer;
-  transition: all 0.2s;
-  font-family: inherit;
+  transition: all var(--transition);
+  font-family: var(--font-body);
 }
 
 .sample-button:hover {
-  border-color: var(--accent);
+  border-color: rgba(232, 168, 56, 0.4);
   color: var(--accent);
   background: var(--accent-bg);
 }
@@ -282,9 +725,7 @@ body {
 }
 
 @keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+  to { transform: rotate(360deg); }
 }
 
 /* Error */
@@ -297,7 +738,10 @@ body {
   margin-bottom: 1.5rem;
 }
 
-/* Answer */
+/* ========================================
+   Answer Display
+   ======================================== */
+
 .answer-container {
   display: flex;
   flex-direction: column;
@@ -340,10 +784,14 @@ body {
 }
 
 .answer-section {
-  background: var(--surface);
-  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
   border-radius: var(--radius);
   padding: 1.5rem;
+}
+
+.answer-main {
+  border-left: 3px solid var(--accent);
 }
 
 .answer-main h2 {
@@ -392,7 +840,10 @@ body {
   margin-bottom: 1rem;
 }
 
-/* Verse Card */
+/* ========================================
+   Verse Cards
+   ======================================== */
+
 .verses-list {
   display: flex;
   flex-direction: column;
@@ -400,7 +851,7 @@ body {
 }
 
 .verse-card {
-  border: 1px solid var(--border);
+  border: 1px solid var(--glass-border);
   border-left: 3px solid var(--accent);
   border-radius: var(--radius-sm);
   overflow: hidden;
@@ -416,14 +867,14 @@ body {
   border: none;
   color: var(--text);
   cursor: pointer;
-  font-family: inherit;
+  font-family: var(--font-body);
   font-size: 0.85rem;
   text-align: left;
   transition: background 0.15s;
 }
 
 .verse-header:hover {
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .verse-ref {
@@ -470,53 +921,104 @@ body {
   color: var(--text-muted);
 }
 
-/* Footer */
+/* ========================================
+   Footer
+   ======================================== */
+
 .app-footer {
-  margin-top: 3rem;
-  padding-top: 1.5rem;
+  padding: 2.5rem 1.5rem;
   border-top: 1px solid var(--border);
   text-align: center;
   color: var(--text-muted);
   font-size: 0.78rem;
-  line-height: 1.5;
+  line-height: 1.6;
+  max-width: 700px;
+  margin: 0 auto;
+  width: 100%;
 }
 
 .footer-note {
-  margin-top: 0.25rem;
+  margin-top: 0.35rem;
   font-size: 0.72rem;
   opacity: 0.7;
 }
 
-/* Responsive */
-@media (max-width: 700px) {
-  .app-header {
-    padding: 1.5rem 1rem 1rem;
+/* ========================================
+   Responsive — Tablet
+   ======================================== */
+
+@media (max-width: 900px) {
+  .hero-title {
+    font-size: 2.8rem;
   }
 
-  .app-title {
-    font-size: 1.4rem;
+  .theme-grid,
+  .scripture-grid,
+  .showdown-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+/* ========================================
+   Responsive — Mobile
+   ======================================== */
+
+@media (max-width: 600px) {
+  .nav-bar {
+    padding: 0.75rem 1rem;
   }
 
-  .app-main {
-    padding: 1rem;
+  .hero {
+    padding: 3rem 1rem 2rem;
   }
 
-  .selector-row {
+  .hero-title {
+    font-size: 2.2rem;
+  }
+
+  .hero-subtitle {
+    font-size: 0.95rem;
+  }
+
+  .hero-search {
     flex-direction: column;
-    align-items: stretch;
   }
 
-  .selector-tabs {
-    flex-wrap: wrap;
+  .hero-search-btn {
+    width: 100%;
+    text-align: center;
+    justify-content: center;
   }
 
-  .tab-button {
+  .home-content {
+    padding: 0 1rem 2rem;
+  }
+
+  .section-heading {
+    font-size: 1.25rem;
+  }
+
+  .theme-grid,
+  .scripture-grid,
+  .showdown-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .ask-view {
+    padding: 1.25rem 1rem 2rem;
+  }
+
+  .ask-view-title {
+    font-size: 1.3rem;
+  }
+
+  .pill-button {
+    padding: 0.38rem 0.7rem;
     font-size: 0.78rem;
-    padding: 0.5rem 0.65rem;
   }
 
-  .compare-toggle {
-    align-self: flex-start;
+  .pill-button.compare-toggle {
+    margin-left: 0;
   }
 
   .search-button {
