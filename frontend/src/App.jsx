@@ -1026,7 +1026,7 @@ export default function App() {
       </nav>
 
       {/* Views */}
-      {view === "home" ? <HomeView /> : <AskView />}
+      {view === "home" ? HomeView() : AskView()}
 
       {/* Footer */}
       <footer className="app-footer">
