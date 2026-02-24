@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import "./App.css";
 
@@ -142,6 +142,12 @@ const SURPRISE_POOL = [
 ];
 
 const SAMPLE_QUESTIONS = {
+  "": [
+    "What do the scriptures say about the nature of the soul?",
+    "How is karma described across the texts?",
+    "What do the epics say about ideal leadership?",
+    "How do different traditions describe consciousness?",
+  ],
   "Bhagavad Gita": [
     "What is the nature of the soul?",
     "What does Krishna say about duty?",
@@ -235,7 +241,6 @@ function VerseCard({ verse, defaultOpen }) {
 function AnswerDisplay({ data }) {
   if (!data) return null;
 
-  const traditions = [...new Set(data.verses.map((v) => v.tradition))];
   const textNames = [...new Set(data.verses.map((v) => v.text_name))];
 
   return (
@@ -276,6 +281,65 @@ function AnswerDisplay({ data }) {
   );
 }
 
+/* Chat message components */
+function ChatUserMessage({ content }) {
+  return (
+    <div className="chat-msg chat-msg-user">
+      <div className="chat-msg-label">You</div>
+      <div className="chat-msg-bubble">{content}</div>
+    </div>
+  );
+}
+
+function ChatAssistantMessage({ msg }) {
+  const [versesOpen, setVersesOpen] = useState(false);
+  const textNames = [...new Set(msg.verses.map((v) => v.text_name))];
+
+  return (
+    <div className="chat-msg chat-msg-assistant">
+      <div className="chat-msg-label">SutraAI</div>
+      <div className="chat-answer-body">
+        <div className="answer-meta-bar" style={{ marginBottom: "0.75rem" }}>
+          {msg.compare_mode && (
+            <span className="compare-label">Comparison Mode</span>
+          )}
+          {textNames.map((t) => {
+            const verse = msg.verses.find((v) => v.text_name === t);
+            return (
+              <TextBadge key={t} textName={t} tradition={verse?.tradition} />
+            );
+          })}
+        </div>
+        <div className="answer-main chat-answer-main">
+          <ReactMarkdown>{msg.content}</ReactMarkdown>
+        </div>
+        {msg.verses.length > 0 && (
+          <div className="chat-verses-toggle">
+            <button
+              className="chat-verses-btn"
+              onClick={() => setVersesOpen(!versesOpen)}
+            >
+              {versesOpen ? "Hide" : "Show"} {msg.verses.length} referenced passage{msg.verses.length !== 1 ? "s" : ""}
+              <span style={{ marginLeft: "0.3rem" }}>{versesOpen ? "\u25BE" : "\u25B8"}</span>
+            </button>
+            {versesOpen && (
+              <div className="verses-list" style={{ marginTop: "0.75rem" }}>
+                {msg.verses.map((v, i) => (
+                  <VerseCard
+                    key={`${v.text_name}-${v.chapter}-${v.verse}-${i}`}
+                    verse={v}
+                    defaultOpen={false}
+                  />
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ========================================
    Main App
    ======================================== */
@@ -283,6 +347,7 @@ function AnswerDisplay({ data }) {
 export default function App() {
   const [view, setView] = useState("home");
   const [texts, setTexts] = useState([]);
+  // "" means "All Scriptures"
   const [selectedText, setSelectedText] = useState("");
   const [compareMode, setCompareMode] = useState(false);
   const [compareTexts, setCompareTexts] = useState([]);
@@ -291,19 +356,33 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
+  // Chat mode state
+  const [chatMode, setChatMode] = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [chatLoading, setChatLoading] = useState(false);
+  const chatBottomRef = useRef(null);
+
   useEffect(() => {
     fetch(`${API_URL}/texts`)
       .then((r) => r.json())
       .then((data) => {
         setTexts(data);
-        if (data.length > 0) setSelectedText(data[0].name);
+        // Default to "All Scriptures"
+        setSelectedText("");
       })
       .catch(() => {});
   }, []);
 
+  // Scroll chat to bottom when new messages arrive
+  useEffect(() => {
+    if (chatMode && chatBottomRef.current) {
+      chatBottomRef.current.scrollIntoView({ behavior: "smooth" });
+    }
+  }, [messages, chatLoading, chatMode]);
+
   /* Navigation helpers */
   function navigateToAsk({ text, q, compare, compareTextsList } = {}) {
-    const finalText = text || selectedText;
+    const finalText = text !== undefined ? text : selectedText;
     const finalCompare = compare || false;
     const finalCompareTexts = compareTextsList || [];
 
@@ -312,11 +391,11 @@ export default function App() {
     setCompareTexts(finalCompareTexts);
     setResult(null);
     setError(null);
+    setMessages([]);
     setView("ask");
 
     if (q) {
       setQuestion(q);
-      // Fire the query with direct parameters to avoid stale state
       fireQuery(q, {
         textFilter: finalCompare ? null : finalText,
         compareTexts: finalCompare ? finalCompareTexts : null,
@@ -331,9 +410,11 @@ export default function App() {
     setResult(null);
     setError(null);
     setQuestion("");
+    setMessages([]);
+    setChatMode(false);
   }
 
-  /* Core API call */
+  /* Core single-shot API call */
   async function fireQuery(q, overrides = {}) {
     const text = q.trim();
     if (!text) return;
@@ -348,6 +429,7 @@ export default function App() {
     } else if (overrides.textFilter) {
       body.text_filter = overrides.textFilter;
     }
+    // If textFilter is "" or null → no text_filter sent → searches all scriptures
 
     try {
       const res = await fetch(`${API_URL}/ask`, {
@@ -369,7 +451,7 @@ export default function App() {
     }
   }
 
-  /* Ask-view query (uses current state) */
+  /* Ask-view single-shot query (uses current state) */
   async function handleAsk(q) {
     const text = (q || question).trim();
     if (!text) return;
@@ -391,7 +473,76 @@ export default function App() {
 
   function handleSample(q) {
     setQuestion(q);
-    handleAsk(q);
+    if (chatMode) {
+      // In chat mode, fire it as a chat message
+      sendChatMessage(q);
+    } else {
+      handleAsk(q);
+    }
+  }
+
+  /* Chat mode send */
+  async function sendChatMessage(q) {
+    const text = (q || question).trim();
+    if (!text || chatLoading) return;
+
+    // Build history from current messages (last 3 pairs)
+    const history = messages
+      .filter((m) => m.role === "user" || m.role === "assistant")
+      .slice(-6)
+      .map((m) => ({ role: m.role, content: m.content }));
+
+    const userMsgId = Date.now();
+    setMessages((prev) => [
+      ...prev,
+      { id: userMsgId, role: "user", content: text },
+    ]);
+    setQuestion("");
+    setChatLoading(true);
+    setError(null);
+
+    const body = { question: text, chat_history: history };
+    if (compareMode && compareTexts.length > 1) {
+      body.compare_texts = compareTexts;
+    } else if (selectedText) {
+      body.text_filter = selectedText;
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/ask`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => null);
+        throw new Error(errData?.detail || `Server error (${res.status})`);
+      }
+
+      const data = await res.json();
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: Date.now(),
+          role: "assistant",
+          content: data.answer,
+          verses: data.verses || [],
+          compare_mode: data.compare_mode,
+        },
+      ]);
+    } catch (err) {
+      setError(err.message);
+      // Remove optimistic user message on error
+      setMessages((prev) => prev.filter((m) => m.id !== userMsgId));
+    } finally {
+      setChatLoading(false);
+    }
+  }
+
+  function handleChatSubmit(e) {
+    e.preventDefault();
+    sendChatMessage();
   }
 
   function toggleCompareText(name) {
@@ -409,7 +560,8 @@ export default function App() {
     e.preventDefault();
     const q = question.trim();
     if (!q) return;
-    navigateToAsk({ q });
+    // Hero search → all scriptures, single mode
+    navigateToAsk({ text: "", q });
   }
 
   /* ========================================
@@ -466,7 +618,6 @@ export default function App() {
                   }
                 >
                   <div
-                    className="theme-card-accent"
                     style={{
                       position: "absolute",
                       top: 0,
@@ -573,12 +724,37 @@ export default function App() {
       ? Object.values(SAMPLE_QUESTIONS).flat().slice(0, 4)
       : SAMPLE_QUESTIONS[selectedText] || [];
 
+    const isAllScriptures = !compareMode && selectedText === "";
+
     return (
       <div className="view-container" key="ask">
         <div className="ask-view">
           {/* Text Selector */}
           <div className="text-selector">
             <div className="selector-pills">
+              {/* All Scriptures pill */}
+              <button
+                className={`pill-button pill-all ${isAllScriptures && !compareMode ? "active" : ""}`}
+                onClick={() => {
+                  setCompareMode(false);
+                  setCompareTexts([]);
+                  setSelectedText("");
+                }}
+                style={
+                  isAllScriptures && !compareMode
+                    ? {
+                        backgroundColor: "rgba(232, 168, 56, 0.12)",
+                        borderColor: "rgba(232, 168, 56, 0.5)",
+                        color: "#e8a838",
+                      }
+                    : {}
+                }
+              >
+                <span className="pill-all-icon">✦</span>
+                All Scriptures
+              </button>
+
+              {/* Individual scripture pills */}
               {texts.map((t) => {
                 const color = TRADITION_COLORS[t.tradition] || "#888";
                 const isActive = compareMode
@@ -589,11 +765,13 @@ export default function App() {
                   <button
                     key={t.name}
                     className={`pill-button ${isActive ? "active" : ""}`}
-                    onClick={() =>
-                      compareMode
-                        ? toggleCompareText(t.name)
-                        : setSelectedText(t.name)
-                    }
+                    onClick={() => {
+                      if (compareMode) {
+                        toggleCompareText(t.name);
+                      } else {
+                        setSelectedText(t.name);
+                      }
+                    }}
                     style={
                       isActive
                         ? {
@@ -618,85 +796,210 @@ export default function App() {
                   </button>
                 );
               })}
-              <button
-                className={`pill-button compare-toggle ${compareMode ? "active" : ""}`}
-                onClick={() => {
-                  setCompareMode(!compareMode);
-                  if (!compareMode) setCompareTexts([]);
-                }}
-              >
-                {compareMode ? "\u2715 Compare" : "\u21C6 Compare"}
-              </button>
+
+              {/* Mode toggles */}
+              <div className="mode-toggles">
+                <button
+                  className={`pill-button compare-toggle ${compareMode ? "active" : ""}`}
+                  onClick={() => {
+                    setCompareMode(!compareMode);
+                    if (!compareMode) {
+                      setCompareTexts([]);
+                      setChatMode(false);
+                    }
+                  }}
+                >
+                  {compareMode ? "\u2715 Compare" : "\u21C6 Compare"}
+                </button>
+                <button
+                  className={`pill-button chat-toggle ${chatMode ? "active" : ""}`}
+                  onClick={() => {
+                    setChatMode(!chatMode);
+                    if (!chatMode) {
+                      // Switching to chat — clear single result
+                      setResult(null);
+                      setError(null);
+                      setCompareMode(false);
+                    } else {
+                      // Switching back to single — clear chat
+                      setMessages([]);
+                    }
+                  }}
+                >
+                  {chatMode ? "\u2715 Chat" : "\u2026 Chat"}
+                </button>
+              </div>
             </div>
             {compareMode && (
               <p className="compare-hint">
                 Select 2+ texts to compare. {compareTexts.length} selected.
               </p>
             )}
+            {chatMode && (
+              <p className="compare-hint" style={{ color: "#58b4e8" }}>
+                Chat mode — ask follow-up questions. Conversation history is maintained.
+              </p>
+            )}
           </div>
 
-          {/* Search */}
-          <form className="search-form" onSubmit={handleSubmit}>
-            <div className="input-wrapper">
-              <input
-                type="text"
-                className="search-input"
-                placeholder={
-                  compareMode
-                    ? "Ask a question to compare across texts..."
-                    : `Ask about ${selectedText}...`
-                }
-                value={question}
-                onChange={(e) => setQuestion(e.target.value)}
-                disabled={loading}
-                maxLength={500}
-              />
-              <button
-                type="submit"
-                className="search-button"
-                disabled={
-                  loading ||
-                  !question.trim() ||
-                  (compareMode && compareTexts.length < 2)
-                }
-              >
-                {loading ? <span className="spinner" /> : "Ask"}
-              </button>
-            </div>
-          </form>
+          {/* ---- CHAT MODE ---- */}
+          {chatMode ? (
+            <div className="chat-view">
+              {messages.length === 0 && !chatLoading && (
+                <div className="chat-empty">
+                  <p className="chat-empty-title">Start a conversation</p>
+                  <p className="chat-empty-sub">
+                    {isAllScriptures
+                      ? "Searching across all scriptures"
+                      : `Searching in ${selectedText}`}
+                  </p>
+                  {activeSamples.length > 0 && (
+                    <div className="samples" style={{ marginTop: "1.25rem" }}>
+                      <p className="samples-label">Try a question:</p>
+                      <div className="samples-grid">
+                        {activeSamples.map((q) => (
+                          <button
+                            key={q}
+                            className="sample-button"
+                            onClick={() => handleSample(q)}
+                          >
+                            {q}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
 
-          {/* Samples */}
-          {!result && !loading && !error && activeSamples.length > 0 && (
-            <div className="samples">
-              <p className="samples-label">Try a question:</p>
-              <div className="samples-grid">
-                {activeSamples.map((q) => (
+              {messages.length > 0 && (
+                <div className="chat-thread">
+                  {messages.map((msg) =>
+                    msg.role === "user" ? (
+                      <ChatUserMessage key={msg.id} content={msg.content} />
+                    ) : (
+                      <ChatAssistantMessage key={msg.id} msg={msg} />
+                    )
+                  )}
+                  {chatLoading && (
+                    <div className="chat-msg chat-msg-assistant">
+                      <div className="chat-msg-label">SutraAI</div>
+                      <div className="chat-loading-bubble">
+                        <div className="chat-loading-dots">
+                          <span /><span /><span />
+                        </div>
+                        <span style={{ color: "var(--text-muted)", fontSize: "0.85rem" }}>
+                          Searching passages...
+                        </span>
+                      </div>
+                    </div>
+                  )}
+                  <div ref={chatBottomRef} />
+                </div>
+              )}
+
+              {error && (
+                <div className="error-state" style={{ margin: "0 0 1rem" }}>
+                  <p>⚠ {error}</p>
+                </div>
+              )}
+
+              {/* Chat Input */}
+              <form className="chat-input-form" onSubmit={handleChatSubmit}>
+                <div className="chat-input-wrapper">
+                  <input
+                    type="text"
+                    className="chat-input"
+                    placeholder={
+                      messages.length > 0
+                        ? "Ask a follow-up question..."
+                        : isAllScriptures
+                        ? "Ask anything across all scriptures..."
+                        : `Ask about ${selectedText}...`
+                    }
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    disabled={chatLoading}
+                    maxLength={500}
+                  />
                   <button
-                    key={q}
-                    className="sample-button"
-                    onClick={() => handleSample(q)}
+                    type="submit"
+                    className="chat-send-btn"
+                    disabled={chatLoading || !question.trim()}
+                    aria-label="Send"
                   >
-                    {q}
+                    {chatLoading ? <span className="spinner" /> : "↑"}
                   </button>
-                ))}
-              </div>
+                </div>
+              </form>
             </div>
-          )}
+          ) : (
+            /* ---- SINGLE MODE ---- */
+            <>
+              <form className="search-form" onSubmit={handleSubmit}>
+                <div className="input-wrapper">
+                  <input
+                    type="text"
+                    className="search-input"
+                    placeholder={
+                      compareMode
+                        ? "Ask a question to compare across texts..."
+                        : isAllScriptures
+                        ? "Ask anything across all scriptures..."
+                        : `Ask about ${selectedText}...`
+                    }
+                    value={question}
+                    onChange={(e) => setQuestion(e.target.value)}
+                    disabled={loading}
+                    maxLength={500}
+                  />
+                  <button
+                    type="submit"
+                    className="search-button"
+                    disabled={
+                      loading ||
+                      !question.trim() ||
+                      (compareMode && compareTexts.length < 2)
+                    }
+                  >
+                    {loading ? <span className="spinner" /> : "Ask"}
+                  </button>
+                </div>
+              </form>
 
-          {loading && (
-            <div className="loading-state">
-              <div className="loading-spinner" />
-              <p>Searching passages and generating answer...</p>
-            </div>
-          )}
+              {!result && !loading && !error && activeSamples.length > 0 && (
+                <div className="samples">
+                  <p className="samples-label">Try a question:</p>
+                  <div className="samples-grid">
+                    {activeSamples.map((q) => (
+                      <button
+                        key={q}
+                        className="sample-button"
+                        onClick={() => handleSample(q)}
+                      >
+                        {q}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
 
-          {error && (
-            <div className="error-state">
-              <p>⚠ {error}</p>
-            </div>
-          )}
+              {loading && (
+                <div className="loading-state">
+                  <div className="loading-spinner" />
+                  <p>Searching passages and generating answer...</p>
+                </div>
+              )}
 
-          <AnswerDisplay data={result} />
+              {error && (
+                <div className="error-state">
+                  <p>⚠ {error}</p>
+                </div>
+              )}
+
+              <AnswerDisplay data={result} />
+            </>
+          )}
         </div>
       </div>
     );

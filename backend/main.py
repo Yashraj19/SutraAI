@@ -34,10 +34,16 @@ store.load("vector_store_multi.pkl")
 rag = ScriptureRAG(store)
 
 
+class ChatMessage(BaseModel):
+    role: str  # "user" or "assistant"
+    content: str
+
+
 class QuestionRequest(BaseModel):
     question: str
     text_filter: str | None = None
     compare_texts: list[str] | None = None
+    chat_history: list[ChatMessage] | None = None
 
 
 class VerseDetail(BaseModel):
@@ -80,10 +86,12 @@ async def ask_question(req: QuestionRequest):
         )
 
     try:
+        history = [m.model_dump() for m in req.chat_history] if req.chat_history else None
         result = rag.query(
             question=question,
             text_filter=req.text_filter,
             compare_texts=req.compare_texts,
+            chat_history=history,
         )
         return AnswerResponse(
             query=result["query"],

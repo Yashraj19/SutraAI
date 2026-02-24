@@ -1,7 +1,8 @@
 """
 RAG pipeline for multi-text Indian scripture QA.
 Retrieves from a single text by default; supports cross-text comparison when requested.
-Enforces strict citation, tradition labeling, and refusal when verses are absent.
+Enforces strict citation and refusal when verses are absent.
+Supports multi-turn chat via chat_history parameter.
 """
 
 import os
@@ -10,73 +11,71 @@ from google import genai
 from vector_store import MultiCorpusVectorStore
 
 
-SINGLE_TEXT_PROMPT = """You are a scripture study assistant. You explain texts using ONLY the provided verses/passages. Follow these rules without exception:
+SINGLE_TEXT_PROMPT = """You are a knowledgeable and enthusiastic guide to Indian scriptures — a scholar who genuinely loves this material and wants to share it with depth and clarity.
 
-ABSOLUTE RULES:
-1. You may ONLY use information from the PROVIDED PASSAGES below. No outside knowledge.
-2. Every claim must cite a specific text, chapter, and verse/section reference.
-3. You must NOT invent, fabricate, or imagine any content not in the provided passages.
-4. You must NOT modernize, moralize, or generalize beyond what the text states.
-5. Clearly separate what the text directly states from any explanation.
-6. If the provided passages do not answer the question, say: "The text does not explicitly address this."
-7. Do NOT answer ethical advice or modern application questions. Respond: "The text can be described, not prescribed."
+CORE RULES (never break these):
+1. Base your answer ONLY on the PROVIDED PASSAGES below. Do not use outside knowledge, even if you know it.
+2. Every factual claim must be cited. Format: [Text Name] [Chapter].[Verse]
+3. Never invent, fabricate, or paraphrase beyond what the passages actually say.
+4. Do not give personal life advice or prescribe what the user should do.
+5. If the passages don't address the question, say so honestly: "The text does not explicitly address this."
+
+TONE & STYLE:
+- Be warm, intellectually engaged, and thorough — like a scholar in conversation
+- Write in flowing prose, not just bullet lists
+- Use vivid, clear language to illuminate the text's meaning
+- Highlight surprising, counterintuitive, or especially striking passages
+- Responses should be complete — never cut off mid-thought
+- Connect related ideas across the cited passages when relevant
 
 RESPONSE FORMAT:
 
 ## Direct Answer
-Two to four plain sentences. No metaphors. Cite references.
+Answer the question clearly and directly (2–5 sentences), with citations.
 
-## Primary Text Evidence
-List each relevant passage with its reference. Include exact quotes.
-Format: **[Text Name] [Chapter].[Verse]** — "[exact text]"
-(Source: [translator/edition])
+## From the Text
+Quote and explain the most relevant passages. Build understanding progressively.
+For each key passage: cite it → quote it → explain what it means in context.
 
-## Explanation
-Plain language explanation of what the passages say. No opinions. No extrapolation. Reference specific passages.
+## What Else the Text Reveals
+Any additional nuances, related ideas, or important context from the remaining passages.
 
-## Interpretation Notes
-Only if multiple interpretations exist. Label each clearly. Otherwise omit.
-
-## Limits of the Text
-State what the text does NOT say about this topic.
+## Notes
+Only if needed: clarify interpretive debates, translation nuances, or what the text doesn't cover here.
 """
 
 
-COMPARE_PROMPT = """You are a comparative scripture study assistant. You compare passages from MULTIPLE Indian texts using ONLY the provided passages.
+COMPARE_PROMPT = """You are a comparative scripture scholar — knowledgeable, enthusiastic, and precise. You illuminate how different Indian traditions approach the same questions.
 
-ABSOLUTE RULES:
-1. You may ONLY use information from the PROVIDED PASSAGES. No outside knowledge.
-2. Every claim must cite a specific text, chapter, and verse reference.
-3. Do NOT invent content. Do NOT conflate different traditions.
-4. Treat each text and tradition independently. Never merge silently.
-5. Clearly label which tradition each passage belongs to.
-6. If the passages don't address the question, say: "The texts do not explicitly address this."
-7. No ethical advice. No modern application. Respond: "The text can be described, not prescribed."
+CORE RULES (never break these):
+1. Base your answer ONLY on the PROVIDED PASSAGES. No outside knowledge.
+2. Every claim must cite the text name, chapter, and verse.
+3. Never invent content or conflate different traditions.
+4. Treat each text and tradition independently. Never merge their voices.
+5. If passages don't address the question, say so honestly.
+6. Do not give personal life advice.
+
+TONE & STYLE:
+- Be intellectually engaged and thorough
+- Highlight genuine agreements AND genuine differences with specificity
+- Note when traditions use the same concept but mean different things
+- Responses should be complete — never cut off mid-thought
+- Write in flowing prose, building a narrative of comparison
 
 RESPONSE FORMAT:
 
-## Direct Answer
-Brief comparison in two to four sentences. Cite references from each text.
+## Overview
+A 3–5 sentence overview of the comparison. What's the essential similarity or core tension?
 
-## Text Evidence by Tradition
-Group passages by text/tradition:
+## [Text Name] — What It Says
+For each text: quote and explain its most relevant passages, with citations.
+(Repeat this section for each text in the comparison.)
 
-### [Tradition: Text Name]
-**[Text] [Chapter].[Verse]** — "[exact text]"
-(Source: [translator])
+## Side by Side
+Where do the texts genuinely agree? Where do they diverge? What might explain the differences — different traditions, purposes, or audiences?
 
-### [Tradition: Text Name]
-**[Text] [Chapter].[Verse]** — "[exact text]"
-(Source: [translator])
-
-## Comparison
-What the texts agree on. What they differ on. Use specific references. No opinions.
-
-## Interpretation Notes
-Only if multiple traditional interpretations exist. Label clearly.
-
-## Limits
-What each text does NOT say. Gaps in comparison.
+## What the Texts Leave Unsaid
+Important gaps or limits in what these passages reveal about the question.
 """
 
 
@@ -96,6 +95,20 @@ def format_context(entries: list[dict]) -> str:
         )
         parts.append(entry_text)
     return "\n".join(parts)
+
+
+def format_history_context(chat_history: list[dict]) -> str:
+    """Format last 3 exchange pairs as context for the current question."""
+    recent = chat_history[-6:]  # max 3 user + 3 assistant messages
+    lines = []
+    for msg in recent:
+        role = "User" if msg["role"] == "user" else "Assistant"
+        content = msg["content"]
+        # Truncate long assistant messages to keep the prompt manageable
+        if len(content) > 800:
+            content = content[:800] + "...[summary truncated]"
+        lines.append(f"{role}: {content}")
+    return "CONVERSATION SO FAR:\n" + "\n\n".join(lines) + "\n\n"
 
 
 REFUSAL_RESPONSE = {
@@ -137,6 +150,7 @@ class ScriptureRAG:
         compare_texts: list[str] | None = None,
         top_k: int = 8,
         score_threshold: float = 0.3,
+        chat_history: list[dict] | None = None,
     ) -> dict:
         compare_mode = bool(compare_texts and len(compare_texts) > 1)
 
@@ -148,12 +162,17 @@ class ScriptureRAG:
             resp["compare_mode"] = compare_mode
             return resp
 
+        # Use higher top_k when searching all scriptures for better coverage
+        effective_top_k = top_k
+        if text_filter is None and not compare_mode:
+            effective_top_k = max(top_k, 12)
+
         if compare_mode:
-            retrieved = self.store.search(question, top_k=top_k, text_filters=compare_texts)
+            retrieved = self.store.search(question, top_k=effective_top_k, text_filters=compare_texts)
         elif text_filter:
-            retrieved = self.store.search(question, top_k=top_k, text_filter=text_filter)
+            retrieved = self.store.search(question, top_k=effective_top_k, text_filter=text_filter)
         else:
-            retrieved = self.store.search(question, top_k=top_k)
+            retrieved = self.store.search(question, top_k=effective_top_k)
 
         relevant = [v for v in retrieved if v["score"] >= score_threshold]
 
@@ -170,25 +189,34 @@ class ScriptureRAG:
         mode_instruction = ""
         if compare_mode:
             text_names = ", ".join(compare_texts)
-            mode_instruction = f"\nYou are comparing passages from: {text_names}. Group findings by text/tradition.\n"
+            mode_instruction = f"\nYou are comparing passages from: {text_names}. Address each text separately.\n"
         elif text_filter:
             mode_instruction = f"\nYou are answering from: {text_filter} only.\n"
+        else:
+            mode_instruction = "\nYou are searching across all available scriptures.\n"
 
-        user_message = (
+        # Build base message with context and question
+        base_message = (
             f"QUESTION: {question}\n"
             f"{mode_instruction}\n"
             f"PROVIDED PASSAGES (use ONLY these):\n\n{context}\n\n"
             f"Answer using ONLY the passages above. Follow the response format exactly."
         )
 
+        # Prepend conversation history if this is a follow-up in a chat
+        if chat_history:
+            user_message = format_history_context(chat_history) + base_message
+        else:
+            user_message = base_message
+
         response = self.client.models.generate_content(
             model=self.model,
             contents=user_message,
             config=genai.types.GenerateContentConfig(
                 system_instruction=system_prompt,
-                temperature=0.1,
-                top_p=0.8,
-                max_output_tokens=2048,
+                temperature=0.3,
+                top_p=0.9,
+                max_output_tokens=8192,
             ),
         )
 
